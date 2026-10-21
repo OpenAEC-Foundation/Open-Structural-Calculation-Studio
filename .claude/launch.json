@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "desktop",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@openaec/structural-calculation-studio"],
+      "port": 3021
+    },
+    {
+      "name": "web-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@openaec/structural-calculation-studio", "--", "--port", "3030", "--strictPort"],
+      "port": 3030
+    }
+  ]
+}

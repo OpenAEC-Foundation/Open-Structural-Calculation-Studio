@@ -1,0 +1,50 @@
+[package]
+name = "open-structural-calculation-studio"
+version = "2026.43.0"
+description = "Open Structural Calculation Studio - lightweight CalcPAD alternative for Eurocode verifications"
+authors = ["OpenAEC Contributors"]
+edition = "2021"
+
+[lib]
+name = "open_structural_calculation_studio_lib"
+crate-type = ["staticlib", "rlib"]
+
+[features]
+default = []
+# Bouwt de PDF-commando's mee die de OpenAEC-rapportengine gebruiken. Zonder
+# deze vlag print de app via de browser (zie components/calc/PrintDocument.tsx)
+# en geven de engine-commando's een nette foutmelding.
+rapportengine = ["dep:openaec-core"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "image-png"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-store = "2.4.2"
+tauri-plugin-os = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+# OpenAEC-rapportengine — optioneel, standaard uit.
+#
+# Stond hier eerder als pad naar een zusterrepo (`../../../../openaec-reports`).
+# Dat pad bestaat alleen op de machine waar die repo toevallig naast dit
+# project staat; overal elders faalde `cargo build` — en daarmee de hele
+# desktop-app, niet alleen de PDF. Nu wijst hij naar de publieke repo en is hij
+# bovendien optioneel, zodat dit project op zichzelf bouwt: zonder zusterrepo,
+# zonder netwerk.
+#
+# Aanzetten met:  cargo build --features rapportengine
+#                 npm run tauri build -- --features rapportengine
+openaec-core = { git = "https://github.com/OpenAEC-Foundation/openaec-reports", branch = "main", optional = true }
+
+# Release profile — reduce LTO + raise codegen-units so the linker fits in RAM
+# on dev machines (LLVM OOM otherwise). Trade-off: slightly bigger binary.
+[profile.release]
+lto = "thin"
+codegen-units = 16
+strip = "debuginfo"

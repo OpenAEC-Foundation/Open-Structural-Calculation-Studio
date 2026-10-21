@@ -1,0 +1,227 @@
+# Open Structural Calculation Studio
+
+Open desktop-applicatie voor constructieve berekeningen op basis van CalcPAD-syntax, met directe export naar IFC (4x3 STEP) en IFCX (JSON-LD). Werkt zowel als standalone Tauri-app als embedded library voor FEM-applicaties en normtoetsingen.
+
+Deze repository bevat de applicatie zelf — editor, rekenkern, projectbeheer, constructierapport en IFC-export — met één uitgewerkte rekenmodule: de **houten balklaag** volgens NEN-EN 1995-1-1 met de Nederlandse nationale bijlage. Een nieuwe module voeg je toe zoals beschreven in [docs/overdracht.md](docs/overdracht.md).
+
+## Features
+
+### Rekenen
+- **Formules met eenheden** — `mm`, `kN`, `N/mm²`, `mm⁴`, … via mathjs unit-aware arithmetic
+- **Automatische unit-simplificatie** — `b*h` geeft direct `mm²`, geen handmatige `to`-cast nodig
+- **Wiskundige opmaak** — KaTeX-rendering met echte breuken, superscripts, subscripts en Griekse letters
+- **Formule-keten** — toont `naam = formule = ingevulde waarden = resultaat` op één regel
+- **Live preview** — split-pane editor (CodeMirror 6) en debounced preview, syntax highlighting voor `.cpd`
+- **Project met meerdere rekenbladen** — dezelfde module kan er meerdere keren in (drie balklagen, elk met eigen invoer); de projectgegevens gelden voor alle bladen
+
+### CalcPAD-compatibiliteit
+Compatibiliteit met voorbeeldbestanden voor de ondersteunde rekensyntax.
+
+- `"Title`, `'prose`, `// comment`
+- `#if … #else if … #else … #end if`, `#hide / #show / #pre / #post`
+- `#repeat n … #end repeat` en `#for var = lo : hi … #loop` (incl. nested)
+- `#def name(p1; p2; …) … #end def` macros, `#def Name$ = literal` constants
+- `#include filename.cpd` — externe macro-libraries en SVG drawings
+- `$Plot{ … @ x = lo : hi }` — inline parametrische plots
+- Subscript-comma's (`V_b,0`, `n_Int,support,points`), `$`-getypeerde refs, matrix `[a;b|c;d]`
+- Format-specs (`:F2`), dotted/percent identifiers (`Cs.Cd`, `F_0.9G50%TotalWeight`)
+- mathjs Matrix-aware `take`, `hlookup`, `hlookup_ge`, `hlookup_le`, `vlookup`, `get`
+
+### Tekeningen
+- **Parametrische SVG-macros** — prose-line value interpolation (`'<line x1="'a'" y1="'b'"/>`)
+- **`@svg … @end`** blocks voor handgeschreven SVG
+- **`@img(file.svg)`** — externe SVG-tekeningen worden inline ge-embed (incl. `<polygon fill="…">`, hatch patterns, gradients) via dezelfde include-resolver als `#include`
+- **`@img(file.png|jpg|…)`** — raster afbeeldingen via `<img src>`
+
+### IFC export
+Live IFCX (JSON-LD draft) en IFC4x3 STEP-SPF generatie. Opslaan schrijft het
+**hele project** weg: alle rekenbladen in één ruimtelijke boom, met een element
+per blad. Zie [docs/ifc-export.md](docs/ifc-export.md).
+- Detecteert structurele elementen via conventionele variabelenamen (`b_fdn`, `l_fdn`, `D_paal`, `M_Ed`, `R_c_d`, …)
+- Altijd geldig Project → Site → Building → Storey skelet
+- IFC-tab met spatial tree, STEP viewer en IFCX JSON viewer (syntax highlighting + klikbare entity-types naar BuildingSMART docs)
+- Eén klik export: `.ifc` / `.ifcx` download
+
+### Overig
+- **Projectgegevens** — gevolgklasse, ontwerplevensduur, windgebied en de projectkop staan op projectniveau en werken door in elk blad
+- **Afdrukken / PDF** — het hele project als één document: voorblad uit de projectgegevens, inhoudsopgave, elk blad op een eigen pagina, met het parametrische beeld én de uitwerking. Met **Voorbeeld** zie je op het scherm precies wat er op papier komt
+- **5 themes** (light, forge, openaec, blueprint, contrast) — OpenAEC design tokens
+- **`@select var "Label" … @end`** dropdown-blocks voor materiaalkeuzes etc.
+
+## Projectstructuur
+
+```
+Open-Structural-Calculation-Studio/
+├── packages/
+│   ├── core/                          # @ifc-calc/core — rekenengine (TS library)
+│   │   ├── src/
+│   │   │   ├── parser.ts              # Line-based parser, macro expansion, #include
+│   │   │   ├── evaluator.ts           # mathjs evaluator + CalcPAD helpers
+│   │   │   ├── ligger.ts              # Ligger op steunpunten (omhullende M/V)
+│   │   │   ├── raamwerk.ts            # Vlakke raamwerken, knikfactor
+│   │   │   ├── doorsnede.ts           # Samengestelde doorsneden
+│   │   │   ├── ifc-generator.ts       # IFCX / IFC4x3 STEP generators
+│   │   │   ├── latex.ts               # Expr → LaTeX converter
+│   │   │   ├── renderer.ts            # HTML renderer (KaTeX, SVG coalescing)
+│   │   │   ├── gef-parser.ts          # Sondering (GEF) parser
+│   │   │   ├── types.ts               # Public types
+│   │   │   └── index.ts               # Public API
+│   │   └── package.json
+│   └── desktop/                       # @openaec/structural-calculation-studio — Tauri app
+│       ├── src/                       # React UI (ribbon, panels, preview)
+│       │   ├── templates/             # Rekenbladen (balklaag) en registratie
+│       │   └── store/projectStore.ts  # Project: exemplaren + projectgegevens
+│       └── src-tauri/                 # Rust shell (Tauri 2)
+├── scripts/                           # Controles (npm run check) en hulpscripts
+├── docs/                              # Opbouw, toetsing, ontwerpen
+└── package.json                       # npm workspaces root
+```
+
+## Document Syntax
+
+```calcpad
+"Voorbeeldproject
+
+#include svg_drawing.cpd
+
+# 1. Invoer
+b = 300 mm
+h = 500 mm
+N_Ed = ?*(kN)
+fck = 30 N/mm^2
+
+# 2. Geometrie
+A = b*h          // mm² — automatisch
+W_y = b*h^2/6    // mm³
+
+# 3. Toetsing
+sigma = N_Ed/A to N/mm^2
+
+#if sigma ≤ fck/1.5
+    'Voldoet ✓
+#else
+    'Voldoet NIET ✗
+#end if
+
+# 4. Detail-tekening
+@img(detail-D1.svg)
+
+# 5. Belasting-diagram
+$Plot{f(x) @ x = 0 : L}
+```
+
+## Installatie
+
+```bash
+npm install
+```
+
+## Ontwikkeling
+
+```bash
+# Browser-preview starten (bouwt eerst de rekenkern)
+npm run dev
+
+# Rekenkern en frontend bouwen, inclusief TypeScript-controle
+npm run build
+
+# Native debugbuild zonder installatiepakket
+npm run build:debug
+
+# Desktop (Tauri) starten
+npm run tauri:dev --workspace=@openaec/structural-calculation-studio
+
+# Rekenkern automatisch herbouwen tijdens wijzigingen
+npm run dev --workspace=@ifc-calc/core
+```
+
+De desktop-app vraagt een Rust-toolchain (`rustup`) plus, op Windows, de
+Visual Studio Build Tools met de C++-werkbelasting en de Windows SDK:
+
+```bash
+winget install --id Rustlang.Rustup --exact
+```
+```bash
+winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+Die tweede vraagt beheerdersrechten; draai hem vanuit een PowerShell die als
+administrator is gestart, anders breekt hij af met code 1602. De browser-preview draait zonder Rust en is voor het rekenwerk zelf
+gelijkwaardig; alleen bestandsdialogen en de opslag van instellingen werken
+daar niet.
+
+### Optioneel: de OpenAEC-rapportengine
+
+Afdrukken gaat standaard via de browser (voorblad, inhoudsopgave, elk blad op
+een pagina, mét tekeningen). De Rust-rapportengine van OpenAEC is optioneel en
+wordt níét meegebouwd, zodat dit project op zichzelf bouwt:
+
+```bash
+npm run tauri build --workspace=@openaec/structural-calculation-studio -- --features rapportengine
+```
+
+Zonder die vlag bestaan de engine-commando's wel, maar geven ze een melding dat
+de build ze niet bevat. Zie [docs/backlog.md](docs/backlog.md) voor waarom die
+weg nu niet de standaard is.
+
+## Gebruik als library
+
+```typescript
+import {
+  parse,
+  evaluate,
+  render,
+  generateIfcx,
+  generateIfc4x3Step,
+} from '@ifc-calc/core';
+
+const source = `
+b = 300 mm
+h = 500 mm
+A = b*h
+N_Ed = 120 kN
+sigma = N_Ed/A to N/mm^2
+`;
+
+// Render naar HTML (KaTeX formules + SVG)
+const ast = parse(source);
+const evaluated = evaluate(ast, {});
+const html = render(evaluated);
+
+// IFC export uit dezelfde calc
+const ifcx = generateIfcx(evaluated, { projectName: 'Toetsing balk B1' });
+const step = generateIfc4x3Step(evaluated, { projectName: 'Toetsing balk B1' });
+```
+
+### Externe SVG / `#include` inlinen
+
+```typescript
+import detailSvg from './detail-D1.svg?raw';
+import svgDrawing from './svg_drawing.cpd?raw';
+
+const ast = parse(source, {
+  includes: new Map([
+    ['detail-D1.svg', detailSvg],     // wordt door @img(detail-D1.svg) inline ge-embed
+    ['svg_drawing.cpd', svgDrawing],  // wordt door #include svg_drawing.cpd geladen
+  ]),
+});
+```
+
+## Tech Stack
+
+- **TypeScript** — type-safe codebase
+- **mathjs** — expressie-parsing, eenheden, matrices
+- **KaTeX** — wiskundige opmaak
+- **CodeMirror 6** — editor met `.cpd` syntax highlighting + autocomplete
+- **React 19** — desktop UI
+- **Tauri 2** — Rust shell met file-system + dialog plugins
+- **Vite** — bundler met `?raw` imports voor samples
+- **npm workspaces** — monorepo
+
+## Licentie
+
+LGPL-3.0, zie [`LICENSE`](LICENSE).
+
+## Status
+
+In actieve ontwikkeling onder de [OpenAEC Foundation](https://github.com/OpenAEC-Foundation). PRs en issues welkom.

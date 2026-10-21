@@ -1,0 +1,746 @@
+/*
+ * Afdrukweergave van het hele project.
+ *
+ * Twee soorten regels, met opzet aan verschillende haakjes:
+ *
+ * - `html.afdrukmodus` zet de ápp weg — lint, projectboom, statusbalk. Die
+ *   klasse staat alleen aan op het moment dat er echt geprint wordt.
+ * - `.print-opmaak` maakt het dócument op. Die klasse hangt aan de uitdraai
+ *   zelf, zodat het afdrukvoorbeeld in de app dezelfde opmaak krijgt zonder
+ *   dat daarvoor de hele applicatie hoeft te verdwijnen.
+ *
+ * Waarom niet gewoon `@media print`: dan is een printlayout niet te
+ * controleren zonder hem uit te draaien.
+ *
+ * `@page` staat los: die geldt sowieso alleen bij het printen.
+ */
+
+@page {
+  size: A4 portrait;
+  /* Ruimer boven en onder: daar staan de loopkop en de loopvoet in. */
+  margin: 24mm 16mm 20mm 16mm;
+  /* Het paginanummer in de ondermarge, midden tussen de loopvoet links en
+     rechts. Alleen de paginamarge kent de teller van het totaal. */
+  @bottom-center {
+    content: "Pagina " counter(page) " van " counter(pages);
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 8pt;
+    color: #6b6b73;
+    vertical-align: middle;
+  }
+}
+
+/*
+ * Huisstijl van de uitdraai (OpenAEC-brandbook): Construction Amber als
+ * accent, Deep Forge voor tekst en koppen, Space Grotesk voor de koppen en
+ * Inter voor de lopende tekst.
+ */
+.print-opmaak {
+  --pr-accent: #D97706;
+  --pr-tekst: #36363E;
+  --pr-zacht: #6b6b73;
+  --pr-lijn: #e4e4e7;
+  --pr-vlak: #FAFAF9;
+  --pr-kop: "Space Grotesk", system-ui, sans-serif;
+}
+
+/*
+ * Buiten de afdrukmodus staat het document buiten beeld, maar wél met een echte
+ * opmaak. Met `display: none` heeft niets een grootte, en de parametrische
+ * beelden meten hun tekengebied met een ResizeObserver — die zou dan nul
+ * teruggeven en de tekening zou leeg blijven. Daarom wegzetten in plaats van
+ * verbergen, op de breedte van een A4 minus de marges.
+ */
+.print-root {
+  position: absolute;
+  left: -20000px;
+  top: 0;
+  width: 178mm;
+}
+
+/* ─── De app zelf verdwijnt ───────────────────────────────────── */
+
+html.afdrukmodus .titlebar,
+html.afdrukmodus .ribbon-container,
+html.afdrukmodus .document-bar,
+html.afdrukmodus .project-browser,
+html.afdrukmodus .status-bar,
+html.afdrukmodus .split-tabs,
+html.afdrukmodus .main-view,
+html.afdrukmodus .backstage-overlay,
+html.afdrukmodus .modal-overlay {
+  display: none !important;
+}
+
+/* De app-schil is een vaste kolom van schermhoogte met verborgen overloop; een
+   afdruk moet juist over zoveel pagina's lopen als hij nodig heeft. */
+html.afdrukmodus,
+html.afdrukmodus body,
+html.afdrukmodus #root {
+  display: block !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  background: #fff !important;
+  color: #000 !important;
+}
+
+html.afdrukmodus .print-root {
+  position: static;
+  left: auto;
+  width: auto;
+  display: block;
+  background: #fff;
+  color: #000;
+  font-family: var(--font-body, "Inter", system-ui, sans-serif);
+  font-size: 10.5pt;
+  line-height: 1.45;
+}
+
+/* ─── Loopkop en -voet ────────────────────────────────────────── */
+
+/* Vaste elementen herhaalt de browser op elke afgedrukte pagina. De negatieve
+   offset zet ze ín de paginamarge, boven en onder de tekst. */
+html.afdrukmodus .print-loopkop,
+html.afdrukmodus .print-loopvoet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 8pt;
+  color: #6b6b73;
+}
+
+html.afdrukmodus .print-loopkop {
+  top: -13mm;
+  padding-bottom: 3pt;
+  border-bottom: 0.75pt solid #D97706;
+  font-weight: 500;
+}
+
+html.afdrukmodus .print-loopvoet {
+  bottom: -11mm;
+  padding-top: 3pt;
+  border-top: 0.5pt solid #d4d4d8;
+}
+
+/* ─── Voorblad ────────────────────────────────────────────────── */
+
+.print-opmaak .print-voorblad {
+  break-after: page;
+  page-break-after: always;
+  color: var(--pr-tekst);
+}
+
+.print-opmaak .print-voorblad-band {
+  width: 44mm;
+  height: 5pt;
+  margin: 6pt 0 16pt;
+  border-radius: 1pt;
+  background: var(--pr-accent);
+}
+
+.print-opmaak .print-soort {
+  margin: 0 0 4pt;
+  font-family: var(--pr-kop);
+  font-size: 8.5pt;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pr-accent);
+}
+
+.print-opmaak .print-voorblad h1 {
+  margin: 0 0 3pt;
+  font-family: var(--pr-kop);
+  font-size: 26pt;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--pr-tekst);
+}
+
+.print-opmaak .print-ondertitel {
+  margin: 0 0 16pt;
+  font-size: 12.5pt;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-gegevens {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10pt 0 0;
+  font-size: 9.5pt;
+}
+
+.print-opmaak .print-gegevens th,
+.print-opmaak .print-gegevens td {
+  padding: 3.5pt 0;
+  border-bottom: 0.5pt solid var(--pr-lijn);
+  text-align: left;
+  vertical-align: top;
+}
+
+.print-opmaak .print-gegevens th {
+  width: 48mm;
+  font-weight: 500;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-sectiekop {
+  margin: 22pt 0 6pt;
+  padding-bottom: 3pt;
+  border-bottom: 1.5pt solid var(--pr-accent);
+  font-family: var(--pr-kop);
+  font-size: 12pt;
+  font-weight: 700;
+  color: var(--pr-tekst);
+}
+
+.print-opmaak .print-resultaten {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+}
+
+.print-opmaak .print-resultaten th {
+  padding: 3pt 5pt;
+  border-bottom: 0.75pt solid var(--pr-tekst);
+  font-size: 7.5pt;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-resultaten td {
+  padding: 4pt 5pt;
+  border-bottom: 0.5pt solid var(--pr-lijn);
+  vertical-align: middle;
+}
+
+.print-opmaak .print-resultaten .nr {
+  width: 7mm;
+  color: #9a9aa2;
+  font-variant-numeric: tabular-nums;
+}
+
+.print-opmaak .print-resultaten .norm {
+  font-size: 8.5pt;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-resultaten .uc {
+  width: 14mm;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.print-opmaak .print-resultaten-noot {
+  margin: 6pt 0 0;
+  font-size: 8pt;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-voorblad-voet {
+  display: flex;
+  justify-content: space-between;
+  gap: 12pt;
+  margin-top: 26pt;
+  padding-top: 5pt;
+  border-top: 0.5pt solid #d4d4d8;
+  font-size: 8.5pt;
+  color: var(--pr-zacht);
+}
+
+/* Het oordeel als label: groen voldoet, rood voldoet niet. */
+.print-opmaak .print-oordeel {
+  display: inline-block;
+  padding: 1pt 6pt;
+  border-radius: 8pt;
+  font-size: 8pt;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.print-opmaak .print-oordeel.goed {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.print-opmaak .print-oordeel.fout {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.print-opmaak .print-oordeel.neutraal {
+  color: #9a9aa2;
+  padding: 0;
+}
+
+/* ─── Projectregel bij een losse berekening ───────────────────── */
+
+.print-opmaak .print-projectregel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1pt 10pt;
+  margin: -6pt 0 10pt;
+  padding: 3pt 6pt;
+  background: var(--pr-vlak);
+  border-left: 2.5pt solid var(--pr-accent);
+  font-size: 8pt;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-projectregel .print-soort {
+  margin: 0;
+  font-size: 7.5pt;
+}
+
+.print-opmaak .print-projectregel b {
+  font-weight: 600;
+  color: var(--pr-tekst);
+}
+
+/* ─── Rekenbladen ─────────────────────────────────────────────── */
+
+/* Elk blad op een eigen pagina — een berekening lees je per onderdeel. */
+.print-opmaak .print-blad {
+  break-before: page;
+  page-break-before: always;
+}
+
+.print-opmaak .print-blad:first-of-type {
+  break-before: auto;
+  page-break-before: auto;
+}
+
+/* De kop van een blad: nummer, naam met de grondslag eronder, en rechts de
+   uitkomst — zo staat het oordeel ook bovenaan het blad zelf. */
+.print-opmaak .print-blad-kop {
+  display: flex;
+  align-items: center;
+  gap: 8pt;
+  margin: 0 0 10pt;
+  padding-bottom: 5pt;
+  border-bottom: 1.5pt solid var(--pr-accent);
+  color: var(--pr-tekst);
+}
+
+.print-opmaak .print-blad-nr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18pt;
+  height: 18pt;
+  border-radius: 4pt;
+  background: var(--pr-tekst);
+  color: #fff;
+  font-family: var(--pr-kop);
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.print-opmaak .print-blad-titel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.print-opmaak .print-blad-naam {
+  font-family: var(--pr-kop);
+  font-size: 14pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.print-opmaak .print-blad-norm {
+  font-size: 8.5pt;
+  color: var(--pr-zacht);
+}
+
+.print-opmaak .print-blad-uitkomst {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6pt;
+}
+
+.print-opmaak .print-blad-uc {
+  font-family: var(--pr-kop);
+  font-size: 10pt;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Niet midden in een formule of tekening afbreken. */
+.print-opmaak .print-blad .calc-line,
+.print-opmaak .print-blad .calc-text,
+.print-opmaak .print-blad table,
+.print-opmaak .print-blad svg,
+.print-opmaak .print-blad img {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.print-opmaak .print-blad h1,
+.print-opmaak .print-blad h2,
+.print-opmaak .print-blad h3,
+.print-opmaak .print-blad h4,
+.print-opmaak .print-blad h5,
+.print-opmaak .print-blad h6 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.print-opmaak .print-blad svg,
+.print-opmaak .print-blad img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Het wortelteken van de formulezetter is een svg met een zeer brede viewBox
+   en een hoogte van zijn ouder; met height:auto wordt hij 0 hoog en valt het
+   teken weg. */
+.print-opmaak .print-blad .katex svg {
+  max-width: none;
+  height: inherit;
+}
+
+/* De titelkop van de uitwerking ("Balklaag — houten vloerbalken volgens …")
+   herhaalt wat de bladkop al zegt. Waar de kop de grondslag toont (PrintBlad,
+   `titelInKop`) vervalt hij, maar alleen als hij bovenaan staat: een blad dat
+   met een paragraafkop begint, houdt die. Weg met `display: none`, zodat de
+   verdeling over de vellen (paginering.ts) hem ook overslaat. De uitkomst in
+   de kop leest de rekenkern zelf, niet deze regel (bladResultaat.ts).
+   Bewust alleen op de sectie zelf (`section`): het afdrukvoorbeeld zet de
+   sectieklasse ook op elk vel (een div), en bovenaan een vel is de eerste kop
+   gewoon een paragraafkop die moet blijven staan. */
+.print-opmaak section.print-titel-in-kop > .ifc-calc > .ifc-calc > h1:first-child {
+  display: none;
+}
+
+/* De kernopmaak houdt de uitwerking smal voor de leesbaarheid op een breed
+   scherm, met 28px lucht eromheen. Op een A4 is de bladspiegel al bepaald door
+   de paginamarge, dus die beperking is daar alleen verspilde ruimte naast de
+   tekening — en de binnenmarge komt bovenop een marge die er al is.
+   Het afdrukvoorbeeld bouwt deze wikkel per pagina opnieuw op; met binnenmarge
+   zou elke pagina er twee keer 28px bij krijgen en overlopen. */
+.print-opmaak .print-blad .ifc-calc {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 !important;
+}
+
+/* Bedieningselementen die op papier niets betekenen: de sleepzone voor een
+   GEF-bestand is een knop, geen inhoud. */
+.print-opmaak .print-blad .calc-gef-upload,
+.print-opmaak .print-blad .calc-gef-dropzone {
+  display: none !important;
+}
+
+/* Invoervelden en keuzelijsten drukken als hun waarde, niet als bedieningselement. */
+.print-opmaak .print-blad input,
+.print-opmaak .print-blad select {
+  border: none !important;
+  background: transparent !important;
+  color: #000 !important;
+  padding: 0 !important;
+  font: inherit !important;
+  appearance: none !important;
+  /* Een getalveld krijgt anders de breedte van het invoervak in plaats van die
+     van het getal, met een gat in de regel als gevolg; een keuzelijst die van
+     zijn langste keuze. `field-sizing` maakt ze zo breed als wat erin staat. */
+  width: auto !important;
+  min-width: 0 !important;
+  field-sizing: content !important;
+}
+
+/* De invoerregel heeft op het scherm een gele achtergrond over de volle breedte
+   om aan te geven dat je er iets kunt intypen, een keuzelijst een blauwe. Op
+   papier is dat geen invoer meer maar een uitgangspunt; een balk over de
+   bladbreedte leidt daar alleen af. Korte uitgangspunten lopen zo naast
+   elkaar door. */
+.print-opmaak .print-blad .calc-input-prompt,
+.print-opmaak .print-blad .calc-select {
+  display: inline-flex !important;
+  gap: 0.4em !important;
+  margin: 1px 1.6em 1px 0 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  width: auto !important;
+}
+
+/* Een invoerregel in de letter van de rekenregels, niet in de schreefloze
+   schermletter voor invoer; de toelichting mag naar een tweede regel, het
+   getal zelf niet ingekort worden. */
+.print-opmaak .print-blad .calc-input-prompt {
+  flex-wrap: wrap;
+  align-items: baseline !important;
+  font-family: inherit !important;
+  font-size: 12.3px !important;
+}
+
+.print-opmaak .print-blad .calc-input-prompt > :not(.calc-comment) {
+  flex-shrink: 0;
+}
+
+/* De toelichting begint met een komma; die hoort tegen de eenheid aan. */
+.print-opmaak .print-blad .calc-input-prompt > .calc-comment {
+  margin-left: -0.4em;
+}
+
+/* Lege alinea's: de browser maakt ze rond een kop of tabel in een tekstregel.
+   Hoogte hebben ze niet, maar als blok breken ze een rij kolommen af. */
+.print-opmaak .print-blad .ifc-calc p:empty {
+  display: none !important;
+}
+
+/* ─── Alleen op het scherm ────────────────────────────────────── */
+
+/*
+ * Een blad geeft per regel aan wat niet op papier hoort: uitleg bij de
+ * invoer, toelichting die op het scherm helpt maar in een rapport alleen
+ * bladzijden kost, een tekening die het beeld bovenaan al laat zien.
+ * - Een element met `alleen-scherm` valt weg, de rest van de regel blijft.
+ * - Een leeg merkteken `<span class="alleen-scherm"></span>` haalt de hele
+ *   regel weg: een formule of invoerveld (in de toelichting), een tekst of een
+ *   kop.
+ * - Een prozaregel die helemaal cursief staat, is uitleg (de kern geeft hem
+ *   de klasse `calc-uitleg`) en valt ook weg; `<i class="ook-afdruk">` houdt
+ *   een cursieve regel op papier (niet getoetst, aannames).
+ * De knopen blijven in de uitwerking; wat een beeld of een controle leest,
+ * verandert niet. De tegenhanger `alleen-afdruk` staat in Preview.css.
+ */
+.print-opmaak .print-blad .alleen-scherm,
+.print-opmaak .print-blad .calc-uitleg,
+.print-opmaak .print-blad :is(.calc-text, .calc-line, .calc-input-prompt, h1, h2, h3, h4, h5, h6):has(.alleen-scherm:empty),
+.print-opmaak .print-blad .calc-svg:has(> .alleen-scherm) {
+  display: none !important;
+}
+
+/*
+ * Korte regels in kolommen: een merkteken `kolom-2`, `kolom-3` of `kolom-4` in
+ * de toelichting zet een formule of invoerveld in een half, een derde of een
+ * kwart van de bladbreedte. De witruimte tussen twee regels in de bron telt als
+ * een spatie; daarom iets smaller dan de deling.
+ */
+.print-opmaak .print-blad :is(.calc-line, .calc-input-prompt):is(:has(.kolom-2), :has(.kolom-3), :has(.kolom-4)) {
+  display: inline-flex !important;
+  vertical-align: top;
+  box-sizing: border-box;
+  margin-right: 0 !important;
+  padding-right: 8px !important;
+}
+
+.print-opmaak .print-blad :is(.calc-line, .calc-input-prompt):has(.kolom-2) {
+  width: calc(50% - 4px) !important;
+}
+
+.print-opmaak .print-blad :is(.calc-line, .calc-input-prompt):has(.kolom-3) {
+  width: calc(33.33% - 4px) !important;
+}
+
+.print-opmaak .print-blad :is(.calc-line, .calc-input-prompt):has(.kolom-4) {
+  width: calc(25% - 4px) !important;
+}
+
+/* Het oordeel van een toets achter de toetsregel zelf: formule, ingevulde
+   waarden, UC en oordeel op één regel. */
+.print-opmaak .print-blad .calc-line:has(+ .calc-text .oordeel) {
+  display: inline-flex !important;
+  vertical-align: middle;
+  margin-right: 0.3em !important;
+}
+
+.print-opmaak .print-blad .calc-text:has(.oordeel) {
+  display: inline !important;
+}
+
+/* Tekeningen die als kaarten naast elkaar staan (de belastinggevallen van de
+   balklaag): drie op een rij, op hun eigen hoogte. */
+.print-opmaak .print-blad .calc-svg:has(> svg.bg-kaart) {
+  display: inline-block;
+  width: calc(33.33% - 4px);
+  margin: 2px 0 6px !important;
+  vertical-align: top;
+}
+
+.print-opmaak .print-blad .calc-svg svg.bg-kaart {
+  max-height: none !important;
+}
+
+/* De omhullende (M- en V-lijn onder elkaar) op de halve bladbreedte, met de
+   maatgevende waarden in kolommen ernaast. Zijn hoogte volgt uit die breedte;
+   de algemene begrenzing zou hem tot onleesbare bijschriften laten krimpen. */
+.print-opmaak .print-blad .calc-svg:has(> svg.omhullende) {
+  display: inline-block;
+  width: calc(50% - 4px);
+  margin: 2px 0 6px !important;
+  vertical-align: top;
+}
+
+.print-opmaak .print-blad .calc-svg svg.omhullende {
+  max-height: none !important;
+}
+
+.print-opmaak .print-blad input[type="number"]::-webkit-inner-spin-button,
+.print-opmaak .print-blad input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* ─── Het parametrische beeld ─────────────────────────────────── */
+
+.print-opmaak .print-beeld {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0 0 12pt;
+}
+
+/* Alleen de tekening, niet de bediening.
+   - `vd-controls`: de invoerkolom — die staat al in de uitwerking eronder.
+   - `vd-head`: "Parametrisch beeld — balklaag", een schermtitel die naast de
+     bladkop niets toevoegt.
+   - `vd-foot`: "Klik op een blauwe maat om die te wijzigen" — een instructie
+     die op papier onzin is. */
+.print-opmaak .print-beeld .vd-controls,
+.print-opmaak .print-beeld .vd-head,
+.print-opmaak .print-beeld .vd-foot,
+.print-opmaak .print-beeld .gd-tabs {
+  display: none !important;
+}
+
+/*
+ * Een vaste hoogte, geen `auto`.
+ *
+ * De designers meten hun tekengebied met een ResizeObserver en schalen de
+ * tekening op die maat. Laat je de hoogte door de inhoud bepalen, dan meet de
+ * observer de tekening die hij zelf net groter maakte: de Spuwer liep zo op tot
+ * een SVG van 33 miljoen pixels hoog en de Voetplaat viel juist samen tot 0×0.
+ * Met een opgegeven hoogte is de meting stabiel en schaalt de tekening netjes
+ * naar de bladbreedte.
+ */
+.print-opmaak .print-beeld .vd-panel {
+  border: none !important;
+  background: transparent !important;
+  /* 208 mm: de balklaag zet vier tekeningen onder elkaar (doorsnede, statisch
+     schema met lastverklaring, M- en V-lijn, doorbuiging). Krap bemeten snijdt
+     het tekengebied de onderste eraf — precies wat er gebeurde toen hier nog
+     150 mm stond. De doorsnede heeft een ondergrens van 130 px, dus onder deze
+     maat kan de kolom niet verder inklappen en gaat er weer iets af. */
+  height: 208mm !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.print-opmaak .print-beeld .vd-body {
+  height: 100% !important;
+  min-height: 0 !important;
+  /* Op papier geen binnenmarge: de bladspiegel heeft al zijn eigen marge. */
+  padding: 4px 0 !important;
+}
+
+/* Op papier valt er niets te scrollen: de tekeningkolom moet gewoon zijn
+   volle hoogte innemen. Blijft de schermscroll staan, dan verdwijnt alles
+   onder de vouw en houd je een half beeld met witruimte over. */
+.print-opmaak .print-beeld .vd-canvases {
+  overflow: visible !important;
+  scrollbar-gutter: auto !important;
+  justify-content: flex-start !important;
+}
+
+/* Maatchips zijn knoppen; op papier moeten ze als getal lezen. */
+.print-opmaak .print-beeld .vd-dim-num,
+.print-opmaak .print-beeld .vd-dim button {
+  border: none !important;
+  background: transparent !important;
+  color: #000 !important;
+  padding: 0 !important;
+  font: inherit !important;
+}
+
+.print-opmaak .print-beeld svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ─── Compacter zetwerk op papier ─────────────────────────────── */
+
+/*
+ * De kernopmaak is gemaakt voor een scherm waar je ruim scrollt. Op papier
+ * telt elke regel: een kwart van de bladhoogte ging op aan de witruimte
+ * tússen de blokken, en de rekenregels stonden op schermgrootte (14px, ruim
+ * 10,5pt) terwijl een rekenrapport traditioneel krapper wordt gezet.
+ *
+ * Hier één compacte maatvoering voor de afdruk. Alleen de ruimte en de
+ * korpsgrootte veranderen; er verdwijnt geen inhoud, en op het scherm blijft
+ * de ruimere opmaak staan.
+ */
+.print-opmaak .print-blad .calc-line {
+  margin: 1px 0 !important;
+  padding: 0 !important;
+  font-size: 12.3px !important;
+}
+
+.print-opmaak .print-blad .calc-text {
+  margin: 1.5px 0 !important;
+  font-size: 12.3px !important;
+  line-height: 1.4 !important;
+}
+
+/* Koppen houden lucht erbóven — dat markeert de paragraafovergang — maar
+   niet eronder: de kop hoort al bij de tekst die volgt. */
+.print-opmaak .print-blad h1,
+.print-opmaak .print-blad h2,
+.print-opmaak .print-blad h3,
+.print-opmaak .print-blad h4,
+.print-opmaak .print-blad h5,
+.print-opmaak .print-blad h6 {
+  margin-top: 7px !important;
+  margin-bottom: 2px !important;
+  padding-bottom: 0 !important;
+}
+
+/*
+ * Tekeningen in de uitwerking krimpen op papier mee.
+ *
+ * De rekenbladen geven hun SVG's een `max-height` die op een scherm prettig
+ * leest; vier van die tekeningen onder elkaar kosten op een A4 bijna een heel
+ * vel. Het zijn vectoren, dus kleiner blijft scherp — en de bijschriften staan
+ * in de tekening zelf mee te schalen. Breedte-begrenzing blijft staan, zodat
+ * de verhouding klopt.
+ */
+.print-opmaak .print-blad .calc-svg svg {
+  max-height: 150px !important;
+}
+
+/* Een beeld waarvan op papier geen tekening op de gemeten hoogte schaalt, mag
+   zo hoog worden als zijn inhoud: dan kan de meting niet op zichzelf
+   teruggrijpen. De balklaag tekent daar alleen het statisch schema, bij een
+   raveelbalk met de plattegrond erboven op de hoogte waarbij die de breedte
+   vult (beide volgen uit de breedte). */
+.print-opmaak .print-beeld .vd-panel[data-afdrukhoogte="inhoud"] {
+  height: auto !important;
+}
+
+/* Twee kleine aanzichten (de nagel- en schroefverbinding) hebben genoeg aan
+   minder; dan past het beeld nog op de eerste pagina onder het titelblok. */
+.print-opmaak .print-beeld .vd-panel[data-afdrukhoogte="150"] {
+  height: 150mm !important;
+}
+
+/* Twee lage aanzichten naast elkaar (het windverband: het vak en de
+   aansluiting) hebben aan 110 mm genoeg. */
+.print-opmaak .print-beeld .vd-panel[data-afdrukhoogte="110"] {
+  height: 110mm !important;
+}

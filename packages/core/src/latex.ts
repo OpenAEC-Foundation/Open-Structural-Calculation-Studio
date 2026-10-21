@@ -1,0 +1,343 @@
+import { parse, type MathNode } from 'mathjs';
+
+// ─── Greek letters ──────────────────────────────────────────────────
+
+const GREEK: Record<string, string> = {
+  alpha: '\\alpha', beta: '\\beta', gamma: '\\gamma', delta: '\\delta',
+  epsilon: '\\varepsilon', zeta: '\\zeta', eta: '\\eta', theta: '\\theta',
+  iota: '\\iota', kappa: '\\kappa', lambda: '\\lambda', mu: '\\mu',
+  nu: '\\nu', xi: '\\xi', pi: '\\pi', rho: '\\rho',
+  sigma: '\\sigma', tau: '\\tau', upsilon: '\\upsilon', phi: '\\varphi',
+  chi: '\\chi', psi: '\\psi', omega: '\\omega',
+  Gamma: '\\Gamma', Delta: '\\Delta', Theta: '\\Theta', Lambda: '\\Lambda',
+  Sigma: '\\Sigma', Phi: '\\Phi', Psi: '\\Psi', Omega: '\\Omega',
+};
+
+// ─── Unit names ─────────────────────────────────────────────────────
+
+const UNIT_NAMES = new Set([
+  'mm', 'cm', 'dm', 'm', 'km', 'inch', 'ft',
+  'mm2', 'cm2', 'm2', 'mm3', 'cm3', 'm3', 'mm4', 'cm4', 'm4',
+  'N', 'kN', 'MN', 'GN', 'mN',
+  'Pa', 'kPa', 'MPa', 'GPa',
+  'kg', 'g', 't',
+  's', 'ms', 'min', 'hr',
+  'Hz', 'kHz',
+  'J', 'kJ', 'MJ',
+  'W', 'kW', 'MW',
+  'deg', 'rad',
+  'K', 'C', 'degC', 'degF',
+]);
+
+function isKnownUnit(name: string): boolean {
+  return UNIT_NAMES.has(name);
+}
+
+/**
+ * mathjs kent graden Celsius alleen als `degC`; op het blad hoort °C. Het
+ * gradenteken staat als superscript op een lege basis, zodat het ook in een
+ * macht (°C⁻¹) en in een breuk (1/°C) goed staat. `opmaak` zet de letters in
+ * de stijl van de plek (`\text` in een formule, `\mathrm` in een uitkomst).
+ */
+const GRADEN: Record<string, string> = { degC: 'C', degF: 'F' };
+
+function eenheidsnaam(name: string, opmaak: (s: string) => string): string {
+  const letter = GRADEN[name];
+  return letter ? `{}^{\\circ}${opmaak(letter)}` : opmaak(name);
+}
+
+// ─── Typed node access (mathjs MathNode is loosely typed) ───────────
+
+interface AnyNode {
+  type: string;
+  value?: number | string;
+  name?: string;
+  op?: string;
+  fn?: string | { name?: string };
+  implicit?: boolean;
+  args?: MathNode[];
+  content?: MathNode;
+}
+
+function n(node: MathNode): AnyNode {
+  return node as unknown as AnyNode;
+}
+
+// ─── Symbol formatting ──────────────────────────────────────────────
+
+function escapeText(s: string): string {
+  // KaTeX's `\text{}` is text-mode: `_` and `^` and `\` and `{}` need escaping
+  // to render literally. CalcPAD identifiers fold multi-comma subscripts to
+  // `_` (e.g. `V_b_0`), so the sub-string commonly contains underscores.
+  return s.replace(/\\/g, '\\backslash{}').replace(/[_^{}#$%&]/g, '\\$&');
+}
+
+function symbolToLatex(name: string): string {
+  const underscoreIdx = name.indexOf('_');
+  if (underscoreIdx > 0) {
+    const base = name.substring(0, underscoreIdx);
+    // Elk volgend liggend streepje is een gevouwen komma: `F_v,Rd` wordt bij
+    // het inlezen `F_v_Rd`. In beeld hoort de notatie van de norm, F_{v,Rd}.
+    const sub = name.substring(underscoreIdx + 1).replace(/_/g, ',');
+    const baseLatex = GREEK[base] || base;
+    // Een Griekse letter in het subscript (n_ξ, f_δ) staat in wiskundemodus:
+    // in \text{} heeft KaTeX er geen tekenmaten voor en valt hij terug op een
+    // noodletter, met een waarschuwing in de console.
+    const delen = sub.split(/([Α-ω])/u).filter((d) => d !== '');
+    const subLatex = delen
+      .map((d) => (/^[Α-ω]$/u.test(d) ? d : `\\text{${escapeText(d)}}`))
+      .join('');
+    return `{${baseLatex}_{${subLatex}}}`;
+  }
+  if (GREEK[name]) return GREEK[name];
+  // Multi-letter non-Greek variable: use mathrm
+  if (name.length > 1 && !isKnownUnit(name)) return `\\text{${escapeText(name)}}`;
+  return name;
+}
+
+function unitToLatex(name: string): string {
+  return eenheidsnaam(name, (s) => `\\text{${escapeText(s)}}`);
+}
+
+// ─── Number formatting ──────────────────────────────────────────────
+
+function numberToLatex(value: number): string {
+  if (Number.isNaN(value)) return 'NaN';
+  if (!isFinite(value)) return value > 0 ? '\\infty' : '-\\infty';
+  if (value === 0) return '0';
+
+  // Integer in reasonable range
+  if (Number.isInteger(value) && Math.abs(value) < 1e12) {
+    return value.toString();
+  }
+
+  // Small precision for display
+  const rounded = parseFloat(value.toPrecision(4));
+
+  // Use scientific notation only for very large/small
+  if (Math.abs(rounded) >= 0.001 && Math.abs(rounded) < 1e9) {
+    return rounded.toString();
+  }
+
+  // Scientific notation: 3.125 × 10⁹
+  const exp = Math.floor(Math.log10(Math.abs(value)));
+  const mantissa = parseFloat((value / Math.pow(10, exp)).toPrecision(4));
+  return `${mantissa} \\times 10^{${exp}}`;
+}
+
+// ─── AST to LaTeX ───────────────────────────────────────────────────
+
+export function exprToLatex(expr: string): string {
+  try {
+    const node = parse(expr);
+    return nodeToLatex(node);
+  } catch {
+    return escapeLatex(expr);
+  }
+}
+
+function escapeLatex(s: string): string {
+  return s.replace(/[_^{}\\]/g, c => '\\' + c);
+}
+
+function nodeToLatex(node: MathNode): string {
+  const nd = n(node);
+
+  switch (nd.type) {
+    case 'ConstantNode':
+      return numberToLatex(Number(nd.value));
+
+    case 'SymbolNode': {
+      const name = nd.name!;
+      if (name === 'Infinity') return '\\infty';
+      if (isKnownUnit(name)) return unitToLatex(name);
+      return symbolToLatex(name);
+    }
+
+    case 'OperatorNode':
+      return operatorToLatex(nd);
+
+    case 'FunctionNode':
+      return functionToLatex(nd);
+
+    case 'ParenthesisNode':
+      return `\\left(${nodeToLatex(nd.content!)}\\right)`;
+
+    case 'ArrayNode':
+    case 'BlockNode':
+      return nd.args ? nd.args.map(a => nodeToLatex(a)).join(', ') : '';
+
+    default:
+      return String(node);
+  }
+}
+
+function operatorToLatex(nd: AnyNode): string {
+  const args = nd.args || [];
+
+  switch (nd.op) {
+    case '/': {
+      // Fraction: \frac{num}{den}
+      const num = args[0] ? nodeToLatex(args[0]) : '';
+      const den = args[1] ? nodeToLatex(args[1]) : '';
+      return `\\frac{${num}}{${den}}`;
+    }
+
+    case '*': {
+      if (nd.implicit) {
+        // Implicit multiplication (number · unit): 300 mm → 300\;mm
+        const left = args[0] ? nodeToLatex(args[0]) : '';
+        const right = args[1] ? nodeToLatex(args[1]) : '';
+        // If left is a number and right is a unit, use thin space
+        const rightNd = n(args[1]);
+        if (rightNd.type === 'SymbolNode' && isKnownUnit(rightNd.name!)) {
+          return `${left} \\; ${right}`;
+        }
+        // Otherwise (e.g., 2x), just juxtapose
+        return `${left} \\, ${right}`;
+      }
+      // Explicit multiplication: a · b
+      const parts = args.map(arg => {
+        const child = n(arg);
+        // Wrap addition/subtraction in parentheses
+        if (child.type === 'OperatorNode' && (child.op === '+' || child.op === '-') && (child.args?.length ?? 0) > 1) {
+          return `\\left(${nodeToLatex(arg)}\\right)`;
+        }
+        return nodeToLatex(arg);
+      });
+      return parts.join(' \\cdot ');
+    }
+
+    case '^': {
+      const base = args[0] ? nodeToLatex(args[0]) : '';
+      const exp = args[1] ? nodeToLatex(args[1]) : '';
+      // If base is a complex expression, wrap in braces
+      const baseNd = n(args[0]);
+      if (baseNd.type === 'OperatorNode' || baseNd.type === 'FunctionNode') {
+        return `{\\left(${base}\\right)}^{${exp}}`;
+      }
+      return `{${base}}^{${exp}}`;
+    }
+
+    case '+': {
+      return args.map(arg => nodeToLatex(arg)).join(' + ');
+    }
+
+    case '-': {
+      if (args.length === 1) {
+        // Unary minus
+        return `-${nodeToLatex(args[0])}`;
+      }
+      return args.map((arg, i) => {
+        if (i === 0) return nodeToLatex(arg);
+        return `- ${nodeToLatex(arg)}`;
+      }).join(' ');
+    }
+
+    default:
+      return args.map(arg => nodeToLatex(arg)).join(` \\; ${nd.op} \\; `);
+  }
+}
+
+function functionToLatex(nd: AnyNode): string {
+  const args = nd.args || [];
+  const fnName = typeof nd.fn === 'string' ? nd.fn : nd.fn?.name || nd.name || 'f';
+
+  switch (fnName) {
+    case 'sqrt':
+      return `\\sqrt{${args.map(a => nodeToLatex(a)).join(', ')}}`;
+
+    case 'abs':
+      return `\\left|${args.map(a => nodeToLatex(a)).join(', ')}\\right|`;
+
+    case 'sin': case 'cos': case 'tan':
+    case 'asin': case 'acos': case 'atan':
+    case 'sinh': case 'cosh': case 'tanh':
+    case 'log': case 'ln': case 'exp':
+    case 'min': case 'max': {
+      const latexFn = fnName === 'ln' ? '\\ln' : `\\${fnName}`;
+      return `${latexFn}\\left(${args.map(a => nodeToLatex(a)).join(', ')}\\right)`;
+    }
+
+    case 'pow': {
+      if (args.length === 2) {
+        const base = nodeToLatex(args[0]);
+        const exp = nodeToLatex(args[1]);
+        return `{${base}}^{${exp}}`;
+      }
+      break;
+    }
+
+    case 'round': case 'ceil': case 'floor': {
+      return `\\text{${fnName}}\\left(${args.map(a => nodeToLatex(a)).join(', ')}\\right)`;
+    }
+  }
+
+  // Fallback — overige functies, waaronder de eigen functies van een blad.
+  // Die naam gaat door dezelfde opmaak als een variabele: `R_pA` wordt R met
+  // subscript pA. Een kale `\text{R_pA}` liet KaTeX struikelen over de `_`,
+  // waarna de hele formuleregel als ruwe LaTeX in de uitwerking stond.
+  return `${symbolToLatex(fnName)}\\left(${args.map(a => nodeToLatex(a)).join(', ')}\\right)`;
+}
+
+// ─── Result formatting ──────────────────────────────────────────────
+
+/**
+ * Een uitkomst in e-notatie (`1.200e-5`, zo komt hij uit de rekenkern) als
+ * macht van tien, net als een getal in de ingevulde formule. Letterlijk
+ * overgenomen stond er `1.200e−5`, met een min die als aftrekking oogt.
+ */
+function resultNumberToLatex(numStr: string): string {
+  const m = numStr.match(/^([+-]?\d+(?:\.\d+)?)e([+-]?\d+)$/i);
+  if (!m) return escapeLatex(numStr);
+  return `${parseFloat(m[1])} \\times 10^{${parseInt(m[2], 10)}}`;
+}
+
+/** Format a result value (number + unit) as LaTeX */
+export function resultToLatex(numStr: string, unitStr: string): string {
+  const num = numStr.includes('∞') ? numStr.replace(/∞/g, '\\infty') : resultNumberToLatex(numStr);
+  if (!unitStr) return num;
+  return `${num} \\; ${unitPartToLatex(unitStr)}`;
+}
+
+/** `(m degC)` → `m degC`; alleen als het eerste haakje pas aan het eind sluit. */
+function zonderRandhaakjes(s: string): string {
+  const t = s.trim();
+  if (!t.startsWith('(') || !t.endsWith(')')) return t;
+  let diepte = 0;
+  for (let i = 0; i < t.length - 1; i++) {
+    if (t[i] === '(') diepte++;
+    else if (t[i] === ')' && --diepte === 0) return t;
+  }
+  return t.slice(1, -1).trim();
+}
+
+/** Format a unit string like "N / mm^2" or "kN m" directly as LaTeX. */
+export function unitPartToLatex(unitStr: string): string {
+  // Direct converter — no mathjs round-trip (which prepends `1~` that's
+  // hard to strip reliably). Tokens are identifiers optionally followed by
+  // `^exp`. `/` introduces a denominator; space is implicit multiplication.
+  const fmtToken = (tok: string): string => {
+    const m = tok.match(/^([\p{L}_][\p{L}\p{N}_]*)(?:\^(-?\d+))?$/u);
+    if (!m) return `\\mathrm{${tok}}`;
+    const naam = eenheidsnaam(m[1], (s) => `\\mathrm{${s}}`);
+    if (!m[2]) return naam;
+    return `{${naam}}^{${m[2]}}`;
+  };
+  const fmtGroup = (s: string): string =>
+    s.trim().split(/\s+/).filter(Boolean).map(fmtToken).join('\\,');
+
+  // Een samengestelde noemer komt tussen haakjes binnen: `W / (m degC)`. In
+  // een breuk zijn die overbodig, en ze bleven aan de tokens hangen (`(m`,
+  // `degC)`), die dan niet als eenheid herkend werden: degC bleef degC.
+  const parts = unitStr.split('/').map(zonderRandhaakjes).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return fmtGroup(parts[0]);
+  // a/b/c → a / (b·c)
+  return `\\frac{${fmtGroup(parts[0])}}{${parts.slice(1).map(fmtGroup).join('\\,')}}`;
+}
+
+/** Format a variable name as LaTeX */
+export function nameToLatex(name: string): string {
+  return symbolToLatex(name);
+}

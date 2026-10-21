@@ -1,0 +1,161 @@
+name: Build
+
+# Bouwt alles uit één commit en bewaart het als artifacts bij de run:
+#   - de installers: Windows (per machine en per gebruiker), macOS (universele
+#     .dmg) en Linux (.deb en .AppImage)
+#   - de rekenkern als npm-pakket (@ifc-calc/core)
+# De controles (npm run check) draaien ernaast. Hier wordt niets gepubliceerd;
+# releases komen uit release.yml (v*-tags) en nightly.yml (main).
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # Een deel van de controles importeert TypeScript uit packages/desktop
+      # rechtstreeks; dat vraagt de ingebouwde type-stripping van Node 24.
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm install
+
+      - name: Run checks
+        run: npm run check
+
+  desktop:
+    name: Desktop (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+            target: 'windows-system'
+          - platform: 'windows-latest'
+            args: ''
+            target: 'windows-user'
+          - platform: 'macos-latest'
+            args: '--target universal-apple-darwin'
+            target: 'macos'
+          - platform: 'ubuntu-22.04'
+            args: ''
+            target: 'linux'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust targets (macOS universal)
+        if: matrix.target == 'macos'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install workspace dependencies
+        run: npm install
+
+      - name: Build core package
+        run: npm run build --workspace=@ifc-calc/core
+
+      - name: Set user install mode (Windows user installer)
+        if: matrix.target == 'windows-user'
+        shell: pwsh
+        working-directory: packages/desktop
+        run: |
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $conf.bundle.windows.nsis.installMode = "currentUser"
+          $conf | ConvertTo-Json -Depth 10 | Set-Content src-tauri/tauri.conf.json
+
+      - name: Build Tauri app
+        working-directory: packages/desktop
+        run: npm run tauri build -- ${{ matrix.args }}
+
+      - name: Rename user installer (Windows user installer)
+        if: matrix.target == 'windows-user'
+        shell: pwsh
+        working-directory: packages/desktop/src-tauri/target/release/bundle/nsis
+        run: |
+          Get-ChildItem *_x64-setup.exe |
+            Rename-Item -NewName { $_.Name -replace '_x64-setup\.exe$', '_x64_user-setup.exe' }
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v5
+        with:
+          name: open-structural-calculation-studio-${{ matrix.target }}
+          path: |
+            packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            packages/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            packages/desktop/src-tauri/target/release/bundle/deb/*.deb
+            packages/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+  core:
+    name: Core package
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm install
+
+      - name: Build core package
+        run: npm run build --workspace=@ifc-calc/core
+
+      - name: Pack core package
+        run: |
+          mkdir -p pakket
+          npm pack --workspace=@ifc-calc/core --pack-destination pakket
+
+      - name: Upload core package
+        uses: actions/upload-artifact@v5
+        with:
+          name: ifc-calc-core
+          path: pakket/*.tgz
+          if-no-files-found: error
