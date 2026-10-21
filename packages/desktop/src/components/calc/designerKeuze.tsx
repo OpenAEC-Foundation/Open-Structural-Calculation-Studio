@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import BalklaagDesigner from "./BalklaagDesigner";
+import LiggerDesigner from "./LiggerDesigner";
 
 /**
  * Welk parametrisch beeld hoort bij een rekenblad.
@@ -15,6 +16,7 @@ import BalklaagDesigner from "./BalklaagDesigner";
  */
 const DESIGNERS: { marker: string; beeld: () => ReactElement }[] = [
   { marker: "Balklaag", beeld: () => <BalklaagDesigner /> },
+  { marker: "Ligger van hout of staal", beeld: () => <LiggerDesigner /> },
 ];
 
 /** Het beeld dat bij deze bladtekst hoort, of null als er geen is. */

@@ -15,7 +15,7 @@ welke afspraken gelden, hoe je controleert en hoe je bouwt.
 | `packages/desktop/src/components/calc` | Parametrische beelden (`*Designer.tsx`), koppeling blad↔beeld (`designerKeuze.tsx`, via een herkenningstekst uit de titel), modulecatalogus met status (`projectTree.ts`), uitkomst van een blad (`bladResultaat.ts`), afdruk (`PrintDocument.tsx/.css`, `PrintBlad.tsx`, `paginering.ts`), rekenversie en bijwerken van bladen (`bladVersie.ts`, `BladBijwerken.tsx`). |
 | `packages/desktop/src/rapport`, `components/rapport` | Constructierapport (hoofdstukken, uitgangspunten, belastingen met opbouwen en gewichtenbibliotheek `gewichten.ts`, bijlage A met de rekenbladen). |
 | `packages/desktop/src/store` | Project (exemplaren/bladen, projectgegevens, rapport), projectbestand, undo. |
-| `scripts/check-*.mjs` | Controles; `node scripts/check-alles.mjs` draait ze allemaal (nu 24 controles). |
+| `scripts/check-*.mjs` | Controles; `node scripts/check-alles.mjs` draait ze allemaal (nu 26 controles). |
 
 ## 2. Afspraken in de bladen
 
@@ -29,7 +29,8 @@ welke afspraken gelden, hoe je controleert en hoe je bouwt.
 - **Rekenwijze**: de projectinstelling `rekenwijze` kiest op gemarkeerde punten tussen de referentie-uitwerking (1) en de norm (0). Een splitspunt heet `X_ref` / `X_nb` met `X = if(rekenwijze ≡ 1; X_ref; X_nb)`; `check-rekenwijze.mjs` bewaakt dat. Gebruik het achtervoegsel `_ref` voor niets anders. Bewuste afwijkingen staan in `docs/afwijkingen-referentie.md`.
 - **Invoernamen** mogen niet gelijk zijn aan projectvariabelen (`CC`, `RC`, `DesignLife`, `K_FI`, `onderdeel`, `windgebied`, `terreincategorie`, `rekenwijze`, `locatie`, …); `check-projectvariabelen.mjs` bewaakt dat.
 - **Bestaande bladen**: een blad bewaart zijn eigen kopie van de bladtekst. Met *Bladen bijwerken* gaat het naar de nieuwe tekst; bestaande invoer blijft, nieuwe velden krijgen hun beginwaarde. Kies nieuwe velden en beginwaarden zo dat een bijgewerkt oud blad **nooit stil gunstiger** uitkomt (nieuwe keuze standaard op het oude gedrag, of een veilige standaard). Beelden vullen hun `DEFAULTS` ook in bestaande bladen in (seed): een nieuwe standaardwaarde mag een oud blad niet stil veranderen.
-- **Omhullende M- en V-lijn** (balklaag): per lijn twee doorgetrokken vlakken aan weerszijden van de as — het grootste veldmoment en het grootste steunmoment, +V en −V. Geen maatgevende waarde op een stippellijn. Een vrije puntlast staat per doorsnede op de ongunstigste plaats (`vrijePuntlast` in `balklaagLijnen.ts`, in het blad `eMx`/`eMn`/`eVx`/`eVn`), niet vast in het midden van een veld. De toets is nooit kleiner dan de lijn: `M_y,Ed` en `V_z,Ed` nemen ten minste de grootste waarde van de omhullende. `check-balklaag-omhullende.mjs` bewaakt dit tegen een onafhankelijke stijfheidsmatrix.
+- **Omhullende M- en V-lijn** (balklaag, ligger): per lijn twee doorgetrokken vlakken aan weerszijden van de as — het grootste veldmoment en het grootste steunmoment, +V en −V. Geen maatgevende waarde op een stippellijn. Een vrije puntlast staat per doorsnede op de ongunstigste plaats (`vrijePuntlast` in `balklaagLijnen.ts`, in het blad `eMx`/`eMn`/`eVx`/`eVn`), niet vast in het midden van een veld. De toets is nooit kleiner dan de lijn: `M_y,Ed` en `V_z,Ed` nemen ten minste de grootste waarde van de omhullende. `check-balklaag-omhullende.mjs` bewaakt dit tegen een onafhankelijke stijfheidsmatrix.
+- **Profielen**: `components/calc/profielen.ts` is de bron; een blad krijgt een geplakte matrix (`node scripts/check-profielen.mjs --matrix …`), die `check-profielen` gelijk houdt met de bron.
 - **Getallen voor een beeld**: een beeld leest de uitkomsten van zijn blad onafgerond (`waarde` op de knoop, via `leesGetallen`), niet de op vier cijfers afgeronde tekst; anders komt een nagerekende lijn een cijfer naast de waarde in de kop uit.
 
 ## 3. Normen
@@ -65,6 +66,7 @@ Status in de catalogus: *gereed* (gecalibreerd op referentiebladen), *controlere
 
 | Groep | Modules |
 |---|---|
+| Algemeen | Ligger (hout of staal: twee tot vier steunpunten of een uitkraging, overstekken, inklemming, gerberscharnieren; tot zes lasten; omhullende, kip, doorbuiging) |
 | Hout | Balklaag (houten vloerbalken: enkelvoudige ligger, overstek, twee velden, raveelbalk; vijf belastinggevallen, omhullende M- en V-lijn, trillingen, oplegdruk, kip) |
 | Bibliotheek | CalcPAD-syntaxdemo |
 

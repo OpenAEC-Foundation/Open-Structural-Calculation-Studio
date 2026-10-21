@@ -2,7 +2,7 @@
 
 Open desktop-applicatie voor constructieve berekeningen op basis van CalcPAD-syntax, met directe export naar IFC (4x3 STEP) en IFCX (JSON-LD). Werkt zowel als standalone Tauri-app als embedded library voor FEM-applicaties en normtoetsingen.
 
-Deze repository bevat de applicatie zelf — editor, rekenkern, projectbeheer, constructierapport en IFC-export — met één uitgewerkte rekenmodule: de **houten balklaag** volgens NEN-EN 1995-1-1 met de Nederlandse nationale bijlage. Een nieuwe module voeg je toe zoals beschreven in [docs/overdracht.md](docs/overdracht.md).
+Deze repository bevat de applicatie zelf — editor, rekenkern, projectbeheer, constructierapport en IFC-export — met twee uitgewerkte rekenmodules: de **houten balklaag** volgens NEN-EN 1995-1-1 en de **ligger van hout of staal** volgens NEN-EN 1995-1-1 en NEN-EN 1993-1-1, telkens met de Nederlandse nationale bijlage. Een nieuwe module voeg je toe zoals beschreven in [docs/overdracht.md](docs/overdracht.md).
 
 ## Features
 
@@ -69,7 +69,7 @@ Open-Structural-Calculation-Studio/
 │   │   └── package.json
 │   └── desktop/                       # @openaec/structural-calculation-studio — Tauri app
 │       ├── src/                       # React UI (ribbon, panels, preview)
-│       │   ├── templates/             # Rekenbladen (balklaag) en registratie
+│       │   ├── templates/             # Rekenbladen (balklaag, ligger) en registratie
 │       │   └── store/projectStore.ts  # Project: exemplaren + projectgegevens
 │       └── src-tauri/                 # Rust shell (Tauri 2)
 ├── scripts/                           # Controles (npm run check) en hulpscripts

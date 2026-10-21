@@ -12,4 +12,5 @@ personen, logo's of watermerken. Illustratief, geen uitvoeringsdetail.
 
 | Module-id | Onderwerp van de prompt |
 |---|---|
+| `ligger` | Vrij opgelegde ligger met gelijkmatig verdeelde belasting |
 | `balklaag` | Houten balklaag met vloerplaat in doorsnede |

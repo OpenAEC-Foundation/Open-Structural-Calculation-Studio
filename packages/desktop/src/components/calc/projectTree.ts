@@ -64,6 +64,16 @@ export type TreeNode =
 export const moduleCatalogus: TreeNode[] = [
   {
     kind: "category",
+    id: "cat-algemeen",
+    label: "Algemeen",
+    defaultExpanded: true,
+    count: 1,
+    children: [
+      { kind: "item", id: "sheet-ligger", label: "Ligger (hout of staal)", templateId: "ligger", status: "controleren" },
+    ],
+  },
+  {
+    kind: "category",
     id: "cat-hout",
     label: "Hout",
     defaultExpanded: true,
